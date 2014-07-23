@@ -38,138 +38,69 @@
 # }
 #
 define rundeck::config::project(
-  $file_copier_provider   = '',
-  $node_executor_provider = '',
-  $resource_sources       = '',
-  $ssh_keypath            = '',
-  $projects_dir           = '',
-  $user                   = '',
-  $group                  = '',
+  $file_copier_provider   = $::rundeck::file_copier_provider,
+  $node_executor_provider = $::rundeck::node_executor_provider,
+  $resource_sources       = $::rundeck::resource_sources,
+  $ssh_keypath            = $::rundeck::ssh_keypath,
+  $projects_dir           = $::rundeck::projects_dir,
+  $user                   = $::rundeck::user,
+  $group                  = $::rundeck::group
 ) {
 
-  include rundeck::params
 
-  if "x${ssh_keypath}x" == 'xx' {
-    $skp = $rundeck::params::ssh_keypath
-  } else {
-    $skp = $ssh_keypath
-  }
 
-  if "x${file_copier_provider}x" == 'xx' {
-    $fcp = $rundeck::params::file_copier_provider
-  } else {
-    $fcp = $file_copier_provider
-  }
+  validate_absolute_path($ssh_keypath)
+  validate_re($file_copier_provider, ['jsch-scp','script-copy','stub'])
+  validate_re($node_executor_provider, ['jsch-ssh', 'script-exec', 'stub'])
+  validate_hash($resource_sources)
+  validate_absolute_path($projects_dir)
+  validate_re($user, '[a-zA-Z0-9]{3,}')
+  validate_re($group, '[a-zA-Z0-9]{3,}')
 
-  if "x${node_executor_provider}x" == 'xx' {
-    $nep = $rundeck::params::node_executor_provider
-  } else {
-    $nep = $node_executor_provider
-  }
-
-  if "x${resource_sources}x" == 'xx' {
-    $res_sources = $rundeck::params::resource_sources
-  } else {
-    $res_sources = $resource_sources
-  }
-
-  if "x${projects_dir}x" == 'xx' {
-    $pr = $rundeck::params::projects_dir
-  } else {
-    $pr = $projects_dir
-  }
-
-  if "x${user}x" == 'xx' {
-    $u = $rundeck::params::user
-  } else {
-    $u = $user
-  }
-
-  if "x${group}x" == 'xx' {
-    $g = $rundeck::params::group
-  } else {
-    $g = $group
-  }
-
-  validate_absolute_path($skp)
-  validate_re($fcp, ['jsch-scp','script-copy','stub'])
-  validate_re($nep, ['jsch-ssh', 'script-exec', 'stub'])
-  validate_hash($res_sources)
-  validate_absolute_path($pr)
-  validate_re($u, '[a-zA-Z0-9]{3,}')
-  validate_re($g, '[a-zA-Z0-9]{3,}')
-
-  $project_dir = "${pr}/${name}"
+  $project_dir = "${projects_dir}/${name}"
   $properties_file = "${project_dir}/etc/project.properties"
+ 
 
-  ensure_resource(file, $pr, {'ensure' => 'directory', 'owner' => $user, 'group' => $group})
+  File {
+    owner => $user,
+    group => $group,
+  }
 
   file { $properties_file:
-    ensure  => present,
-    owner   => $u,
-    group   => $g,
-    require => File["${project_dir}/etc"]
+    ensure  => file,
   }
 
-  file { "${project_dir}/var":
+  file { [ $project_dir, "${project_dir}/var", "${project_dir}/etc" ]:
     ensure  => directory,
-    owner   => $u,
-    group   => $g,
-    require => File[$pr]
   }
 
-  file { "${project_dir}/etc":
-    ensure  => directory,
-    owner   => $u,
-    group   => $g,
-    require => File[$project_dir]
-  }
 
-  ini_setting { 'project.name':
+  Ini_setting {
     ensure  => present,
     path    => $properties_file,
     section => '',
-    setting => 'project.name',
-    value   => $name,
-    require => File[$properties_file]
+    require => File[$properties_file],
   }
 
-  ini_setting { 'project.ssh-authentication':
-    ensure  => present,
-    path    => $properties_file,
-    section => '',
-    setting => 'project.ssh-authentication',
-    value   => 'privateKey',
-    require => File[$properties_file]
-  }
-
-  ini_setting { 'project.ssh-keypath':
-    ensure  => present,
-    path    => $properties_file,
-    section => '',
-    setting => 'project.ssh-keypath',
-    value   => $skp,
-    require => File[$properties_file]
-  }
-
-  create_resources(rundeck::config::resource_source, $res_sources)
-
-  #TODO: there are more settings to be added here for both filecopier and nodeexecutor
-  ini_setting { 'service.FileCopier.default.provider':
-    ensure  => present,
-    path    => $properties_file,
-    section => '',
-    setting => 'service.FileCopier.default.provider',
-    value   => $fcp,
-    require => File[$properties_file]
-  }
-
-  ini_setting { 'service.NodeExecutor.default.provider':
-    ensure  => present,
-    path    => $properties_file,
-    section => '',
-    setting => 'service.NodeExecutor.default.provider',
-    value   => $nep,
-    require => File[$properties_file]
-  }
+  ini_setting {
+      'project.name':
+        setting => 'project.name',
+        value   => $name;
+    
+      'project.ssh-authentication':
+        setting => 'project.ssh-authentication',
+        value   => 'privateKey';
+    
+      'project.ssh-keypath':
+        setting => 'project.ssh-keypath',
+        value   => $ssh_keypath;
+    
+      'service.FileCopier.default.provider':
+        setting => 'service.FileCopier.default.provider',
+        value   => $file_copier_provider;
+    
+      'service.NodeExecutor.default.provider':
+        setting => 'service.NodeExecutor.default.provider',
+        value   => $node_executor_provider;
+      }
 }
