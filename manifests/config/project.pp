@@ -38,9 +38,9 @@
 # }
 #
 define rundeck::config::project(
-  $file_copier_provider   = $::rundeck::file_copier_provider,
-  $node_executor_provider = $::rundeck::node_executor_provider,
-  $resource_sources       = $::rundeck::resource_sources,
+  $file_copier_provider   = $::rundeck::params::file_copier_provider,
+  $node_executor_provider = $::rundeck::params::node_executor_provider,
+  $resource_sources       = {},
   $ssh_keypath            = $::rundeck::ssh_keypath,
   $projects_dir           = $::rundeck::projects_dir,
   $user                   = $::rundeck::user,
@@ -60,7 +60,6 @@ define rundeck::config::project(
   $project_dir = "${projects_dir}/${name}"
   $properties_file = "${project_dir}/etc/project.properties"
  
-
   File {
     owner => $user,
     group => $group,
