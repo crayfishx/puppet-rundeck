@@ -71,280 +71,123 @@
 #
 define rundeck::config::resource_source(
   $project_name,
-  $number              = '',
-  $source_type         = '',
-  $file                = '',
-  $include_server_node = '',
-  $resource_format     = '',
-  $url                 = '',
-  $url_timeout         = '',
-  $url_cache           = '',
-  $directory           = '',
-  $script_file         = '',
-  $script_args         = '',
-  $script_args_quoted  = '',
-  $script_interpreter  = '',
-  $projects_dir        = '',
-  $user                = '',
-  $group               = ''
+  $number              = 1,
+  $source_type         = $::rundeck::params::default_source_type,
+  $include_server_node = $::rundeck::params::include_server_node,
+  $resource_format     = $::rundeck::params::resource_format,
+  $url                 = undef,
+  $url_timeout         = $::rundeck::params::url_timeout,
+  $url_cache           = $::rundeck::params::url_cache,
+  $directory           = $::rundeck::params::default_resource_dir,
+  $script_file         = undef,
+  $script_args         = undef,
+  $script_args_quoted  = $::rundeck::params::script_args_quoted,
+  $script_interpreter  = $::rundeck::params::script_interpreter,
+  $projects_dir        = $::rundeck::projects_dir,
+  $user                = $::rundeck::user,
+  $group               = $::rundeck::group
 ) {
 
-  include rundeck::params
-
-  if "x${number}x" == 'xx' {
-    $num = '1'
-  } else {
-    $num = $number
-  }
-
-  if "x${source_type}x" == 'xx' {
-    $type = $rundeck::params::default_source_type
-  } else {
-    $type = $source_type
-  }
-
-  if "x${include_server_node}x" == 'xx' {
-    $inc_server = $rundeck::params::include_server_node
-  } else {
-    $inc_server = $include_server_node
-  }
-
-  if "x${resource_format}x" == 'xx' {
-    $format = $rundeck::params::resource_format
-  } else {
-    $format = $resource_format
-  }
-
-  if "x${url_timeout}x" == 'xx' {
-    $timeout = $rundeck::params::url_timeout
-  } else {
-    $timeout = $url_timeout
-  }
-
-  if "x${url_cache}x" == 'xx' {
-    $cache = $rundeck::params::url_cache
-  } else {
-    $cache = $url_cache
-  }
-
-  if "x${directory}x" == 'xx' {
-    $dir = $rundeck::params::default_resource_dir
-  } else {
-    $dir = $directory
-  }
-
-  if "x${projects_dir}x" == 'xx' {
-    $pd = $rundeck::params::projects_dir
-  } else {
-    $pd = $projects_dir
-  }
-
-  if "x${script_args_quoted}x" == 'xx' {
-    $saq = $rundeck::params::script_args_quoted
-  } else {
-    $saq = $script_args_quoted
-  }
-
-  if "x${script_interpreter}x" == 'xx' {
-    $sci = $rundeck::params::script_interpreter
-  } else {
-    $sci = $script_interpreter
-  }
-
-  if "x${file}x" == 'xx' {
-    $f = "${pd}/${project_name}/etc/resources.xml"
-  } else {
-    $f = $file
-  }
-
-  if "x${user}x" == 'xx' {
-    $u = $rundeck::params::user
-  } else {
-    $u = $user
-  }
-
-  if "x${group}x" == 'xx' {
-    $g = $rundeck::params::group
-  } else {
-    $g = $group
-  }
-
   validate_string($project_name)
-  validate_re($num, '[1-9]*')
-  validate_re($type, ['^file$', '^directory$', '^url$', '^script$'])
-  validate_bool($inc_server)
-  validate_absolute_path($pd)
-  validate_re($u, '[a-zA-Z0-9]{3,}')
-  validate_re($g, '[a-zA-Z0-9]{3,}')
+  validate_re($number, '[1-9]*')
+  validate_re($source_type, ['^file$', '^directory$', '^url$', '^script$'])
+  validate_bool($include_server_node)
+  validate_absolute_path($projects_dir)
+  validate_re($user, '[a-zA-Z0-9]{3,}')
+  validate_re($group, '[a-zA-Z0-9]{3,}')
 
-  ensure_resource('file', "${pd}/${project_name}", {'ensure' => 'directory', 'owner' => $user, 'group' => $group} )
-  ensure_resource('file', "${pd}/${project_name}/etc", {'ensure' => 'directory', 'owner' => $user, 'group' => $group, 'require' => File["${pd}/${project_name}"]} )
-
-  $properties_dir  = "${pd}/${project_name}/etc"
+  $properties_dir  = "${projects_dir}/${project_name}/etc"
   $properties_file = "${properties_dir}/project.properties"
 
-  file { $properties_file:
-    ensure  => present,
-    owner   => $u,
-    group   => $g,
-    mode    => '0640',
-    require => File[$properties_dir]
-  }
 
-  ini_setting { "resources.source.${num}.type":
-    ensure  => present,
-    path    => $properties_file,
+  Ini_setting {
+    ensure => present,
     section => '',
-    setting => "resources.source.${num}.type",
-    value   => $type,
-    require => File[$properties_file]
+    path    => $properties_file,
+    require => File[$properties_file],
+  }
+    
+  ini_setting { "resources.source.${number}.type":
+    setting => "resources.source.${number}.type",
+    value   => $source_type,
   }
 
-  case downcase($type) {
+  case $source_type {
     'file': {
-      validate_re($format, ['^resourcexml$','^resourceyaml$'])
+      validate_re($resource_format, ['^resourcexml$','^resourceyaml$'])
 
-      ini_setting { "resources.source.${num}.config.requireFileExists":
-        ensure  => present,
-        path    => $properties_file,
-        section => '',
-        setting => "resources.source.${num}.config.requireFileExists",
-        value   => true,
-        require => File[$properties_file]
-      }
-
-      ini_setting { "resources.source.${num}.config.includeServerNode":
-        ensure  => present,
-        path    => $properties_file,
-        section => '',
-        setting => "resources.source.${num}.config.includeServerNode",
-        value   => $inc_server,
-        require => File[$properties_file]
-      }
-
-      ini_setting { "resources.source.${num}.config.generateFileAutomatically":
-        ensure  => present,
-        path    => $properties_file,
-        section => '',
-        setting => "resources.source.${num}.config.generateFileAutomatically",
-        value   => true,
-        require => File[$properties_file]
-      }
-
-      ini_setting { "resources.source.${num}.config.format":
-        ensure  => present,
-        path    => $properties_file,
-        section => '',
-        setting => "resources.source.${num}.config.format",
-        value   => $format,
-        require => File[$properties_file]
-      }
-
-      ini_setting { "resources.source.${num}.config.file":
-        ensure  => present,
-        path    => $properties_file,
-        section => '',
-        setting => "resources.source.${num}.config.file",
-        value   => $f,
-        require => File[$properties_file]
-      }
+      ini_setting {
+        "resources.source.${number}.config.requireFileExists":
+          setting => "resources.source.${number}.config.requireFileExists",
+          value   => true;
+        "resources.source.${number}.config.includeServerNode":
+          setting => "resources.source.${number}.config.includeServerNode",
+          value   => $inc_server;
+        "resources.source.${number}.config.generateFileAutomatically":
+          setting => "resources.source.${number}.config.generateFileAutomatically",
+          value   => true;
+        "resources.source.${number}.config.format":
+          setting => "resources.source.${number}.config.format",
+          value   => $format;
+        "resources.source.${number}.config.file":
+          setting => "resources.source.${number}.config.file",
+          value   => $f;
+        }
     }
+
     'url': {
 
       validate_string($url)
-      validate_re($timeout, '[0-9]*')
-      validate_bool($cache)
+      validate_re($url_timeout, '[0-9]*')
+      validate_bool($url_cache)
 
-      ini_setting { "resources.source.${num}.config.url":
-        ensure  => present,
-        path    => $properties_file,
-        section => '',
-        setting => "resources.source.${num}.config.url",
-        value   => $url,
-        require => File[$properties_file]
-      }
-
-      ini_setting { "resources.source.${num}.config.timeout":
-        ensure  => present,
-        path    => $properties_file,
-        section => '',
-        setting => "resources.source.${num}.config.timeout",
-        value   => $timeout,
-        require => File[$properties_file]
-      }
-
-      ini_setting { "resources.source.${num}.config.cache":
-        ensure  => present,
-        path    => $properties_file,
-        section => '',
-        setting => "resources.source.${num}.config.cache",
-        value   => $cache,
-        require => File[$properties_file]
+      ini_setting {
+        "resources.source.${number}.config.url":
+          setting => "resources.source.${number}.config.url",
+          value   => $url;
+        "resources.source.${number}.config.timeout":
+          setting => "resources.source.${number}.config.timeout",
+          value   => $url_timeout;
+        "resources.source.${number}.config.cache":
+          setting => "resources.source.${number}.config.cache",
+          value   => $url_cache;
       }
     }
+
     'directory': {
-      validate_absolute_path($dir)
+      validate_absolute_path($directory)
 
-      ini_setting { "resources.source.${num}.config.directory":
-        ensure  => present,
-        path    => $properties_file,
-        section => '',
-        setting => "resources.source.${num}.config.directory",
+      ini_setting { "resources.source.${number}.config.directory":
+        setting => "resources.source.${number}.config.directory",
         value   => $directory,
-        require => File[$properties_file]
       }
     }
+
     'script': {
-      validate_re($format, ['^resourcexml$','^resourceyaml$'])
-      validate_bool($saq)
-      validate_string($sci)
+      validate_re($resource_format, ['^resourcexml$','^resourceyaml$'])
+      validate_bool($script_args_quoted)
+      validate_string($script_interpreter)
       validate_absolute_path($script_file)
       validate_string($script_args)
 
-      ini_setting { "resources.source.${num}.config.file":
-        ensure  => present,
-        path    => $properties_file,
-        section => '',
-        setting => "resources.source.${num}.config.file",
-        value   => $script_file,
-        require => File[$properties_file]
+      ini_setting {
+        "resources.source.${number}.config.file":
+          setting => "resources.source.${number}.config.file",
+          value   => $script_file;
+        "resources.source.${number}.config.args":
+          setting => "resources.source.${number}.config.args",
+          value   => $script_args;
+        "resources.source.${number}.config.format":
+          setting => "resources.source.${number}.config.format",
+          value   => $resource_format;
+        "resources.source.${number}.config.interpreter":
+          setting => "resources.source.${number}.config.interpreter",
+          value   => $script_interpreter;
+        "resources.source.${number}.config.argsQuoted":
+          setting => "resources.source.${number}.config.argsQuoted",
+          value   => $script_args_quoted;
       }
-
-      ini_setting { "resources.source.${num}.config.args":
-        ensure  => present,
-        path    => $properties_file,
-        section => '',
-        setting => "resources.source.${num}.config.args",
-        value   => $script_args,
-        require => File[$properties_file]
-      }
-
-      ini_setting { "resources.source.${num}.config.format":
-        ensure  => present,
-        path    => $properties_file,
-        section => '',
-        setting => "resources.source.${num}.config.format",
-        value   => $format,
-        require => File[$properties_file]
-      }
-
-      ini_setting { "resources.source.${num}.config.interpreter":
-        ensure  => present,
-        path    => $properties_file,
-        section => '',
-        setting => "resources.source.${num}.config.interpreter",
-        value   => $sci,
-        require => File[$properties_file]
-      }
-
-      ini_setting { "resources.source.${num}.config.argsQuoted":
-        ensure  => present,
-        path    => $properties_file,
-        section => '',
-        setting => "resources.source.${num}.config.argsQuoted",
-        value   => $saq,
-        require => File[$properties_file]
-      }
+      
     }
     default: {
       err("The rundeck resource model type: ${type} is not supported")
